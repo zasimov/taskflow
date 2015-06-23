@@ -212,7 +212,15 @@ class Proxy(object):
             with conn.Consumer(queues=queue, callbacks=callbacks) as consumer:
                 ensure_kwargs = self._ensure_options.copy()
                 ensure_kwargs['errback'] = _drain_errback
-                safe_drain = conn.ensure(consumer, _drain, **ensure_kwargs)
+
+                # NOTE(Alexey Zasimov): Kombu doesn't run
+                # Consumer.consume after channel restoration.
+                def start_consume(channel):
+                    consumer.consume()
+
+                safe_drain = conn.ensure(consumer, _drain,
+                                         on_revive=start_consume,
+                                         **ensure_kwargs)
                 self._running.set()
                 try:
                     while self._running.is_set():
